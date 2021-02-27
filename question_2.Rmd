@@ -1,51 +1,100 @@
 ---
 title: 'Lab 1: Question 1'
-author: "Your Names Here"
+author: "Elaine Chang, Dom Dillingham, Jesse Miller, Michael Wang"
 output: pdf_document
 ---
 
 ```{r load packages, echo=TRUE, warning=FALSE, message=FALSE}
+library(ggplot2)
+library(tidyverse) # if you want more, but still core, toolkit
+library(magrittr)
+library(reshape2)
+library(knitr)
+
+# Load dplyr last for any package issues
 library(dplyr)
-library(ggplot2) 
-# library(tidyverse) # if you want more, but still core, toolkit
 ```
 
 ```{r load and clean data, echo=FALSE, warning=TRUE, message=FALSE}
 rawDat <- haven::read_dta('anes_timeseries_2020_stata_20210211/anes_timeseries_2020_stata_20210211.dta')
 
-## Select fields
-dat <- rawDat %>% select(V201153, V201151, V201018) %>%
+## Select fields & create understandable features
+dat <- rawDat %>% select(V201153, V201151, V201018, V201075x, V201228) %>%
   rename(Kamala_Meter = V201153,
          Biden_Meter = V201151,
-         Party = V201018)
+         Party = V201018,
+         Voting_Party = V201075x) %>%
+  mutate(Voting_Party = case_when(Voting_Party %in% c(10, 20, 30) ~ 'Democrat',
+                           Party %in% c(11, 21, 31)~ 'Republican',
+                           TRUE ~ 'Other'))
 
-# 1 = Democrat
-# 2 = Republican
-dat %<>% filter(Party == 1,
-                Kamala_Meter >= 0,
-                Kamala_Meter <= 100,
-                Biden_Meter >= 0,
-                Biden_Meter <= 100)
-
-hist(dat$Kamala_Meter)
-hist(dat$Biden_Meter)
-
+dat %<>% filter(Voting_Party == 'Democrat',
+                !(Kamala_Meter %in% c(998, 999, -4, -9)),
+                !(Biden_Meter %in% c(998, 999, -4, -9)))
 ```
 
 
 ## Importance and Context
-<!-- You can (and should delete each of these comments lines in your final report) --> 
-<!-- Explain why the reader should care about your research question. -->
+In this analysis, we will be exploring whether Democratic voters are more enthusiastic about Joe Biden or Kamala Harris. With a contentious Democratic primary, we believe this exploration can help explore whether the selection of Kamala Harris may have made the Democratic ballot more positive to those voting Demomcratic.
 
 ## Description of Data
-<!-- Explain how your research question is operationalized, including whether the variables you create are appropriate to study the concepts in question. --> 
-<!-- What are some basic features of the data distribution? --> 
-<!-- What changes do you make to the data and why? --> 
+For this analysis, we will operationalize a Democratic voter to be whether the respondent had voted, intention to vote, or preference for a Democratic presidential candidate. This field is a summary field calcuated by the American National Election Studies. Further, we will operationalize a respondent's preference for Joe Biden or Kamala Harris with a respective `Feeling Thermometer` where the respondent ranks their feeling on a scale from 0 to 100.
 
-## Most appropriate test 
-<!-- Explain which test is the most appropriate to answer your question and why it is the most appropriate --> 
-<!-- List every assumption that your test requires and evaluate it. -->
+The operationalization of a Democratic voter is one of interpretation. Instead of an individuals intent or preference to vote, we could also have operationalized with a respondent's party of regristration. While not all voters are registered, we beleive the selected variable is more appropriate.
+
+The use of the `Feeling Thermometer` does appear to be an appropriate variable for this study. This will allow for better distinction between an individual's perception of each candidate.
+
+For this analysis, the total dataset was just filtered down to those voting for a Democratic presidential candidate. Further, any erroneous values for either the Joe Biden or Kamala Harris thermometer are removed.
+
+From Table 1 below, we see that the difference in thermometer between Joe Biden and Kamala Harris is very close, with Joe Biden being higher by just 1.6 points. While there does appear to be preference for Joe Biden, it is not by much.
+
+```{r distribution table, echo=FALSE, warning=TRUE, message=FALSE, results = 'asis'}
+tableDat <- dat %>% mutate(diff = Biden_Meter - Kamala_Meter) %>% summarise(`Record Count` = n(),
+                              `Average Kamala Harris Thermometer` = round(mean(Kamala_Meter), 2),
+                              `Average Joe Biden Thermometer` = round(mean(Biden_Meter), 2),
+                              `Average Difference` = round(mean(diff), 2))
+kable(tableDat, caption = 'Data Distribution by Candidate')
+```
+
+From the table below, we see that, along with a small difference in mean, there isn't a strong visual difference between the distributions of thermometer by Joe Biden and Kamala Harris though Kamala Harris has a higher distribution near 50.
+
+```{r graphic distribution, echo=FALSE, warning=TRUE, message=FALSE}
+stackedDat <- melt(dat %>% select(Kamala_Meter, Biden_Meter)) %>%
+  mutate(variable = case_when(variable == 'Kamala_Meter' ~ 'Kamala Harris',
+                              TRUE ~ 'Joe Biden'))
+
+ggplot(stackedDat, aes(variable, value)) +
+  geom_violin() +
+  labs(title="Violin of Thermometer",
+       x="Candidate",
+       y="Candidate Thermometer")
+```
+
+```{r graphic distribution type2, echo=FALSE, warning=TRUE, message=FALSE}
+dat %<>% mutate(diff = Kamala_Meter - Biden_Meter)
+
+ggplot(dat, aes(x=diff)) +
+  geom_histogram(color="black", fill="white") +
+  geom_vline(aes(xintercept=mean(diff)),
+            color="blue", linetype="dashed", size=1) +
+  labs(title="Difference Between Kamala Harris & Joe Biden",
+       x="Difference in Thermometer",
+       y="Number of Responses")
+
+```
+
+## Most appropriate test
+The most appropriate test for this analysis a Wilcoxon Signed Rank Test. For this problem, a paired statistical test is prefered as we are not controlling for the influence of other factors that may impact the difference such as age and historical voting patterns, which a paired test will help account for. Within the range of paired test, the Wilcoxon Signed Rank Test pass all the tests assumptions while providing the most power. The assumptions are:
+
+* Metric scale - The thermometer is a metric scale?
+* Paired dependent samples - Each of the drawings are paired dependent samples as the same individual would be asked both questions.
+* Difference between samples is symmetric about mean - From the graph above, it does appear that the data is symmetric about the mean.
+* Paid is drawn IID - ?
 
 ## Test, results and interpretation
-<!-- What are the results of your test? --> 
-<!-- What do the results of this test mean? What is the practical significance? --> 
+```{r test, echo=FALSE, warning=TRUE, message=FALSE}
+wilcox.test(dat$Kamala_Meter, dat$Biden_Meter, paired = TRUE, alternative = "two.sided")
+```
+The result of the statisical test indicate that, with an alpha-level of 0.05, we reject the null hypothesis that the difference bewteen thermometers of Joe Biden and Kamala Harris are 0.
+
+With the small measured difference between Kamala Harris and Joe Biden, while there is a statisically significant difference between the politicians, the practical significance is small.
