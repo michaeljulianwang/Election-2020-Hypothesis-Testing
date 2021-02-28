@@ -1,0 +1,204 @@
+---
+title: 'Lab 1: Question 1'
+author: "Your Names Here"
+output: pdf_document
+---
+
+```{r load packages, echo=TRUE, warning=FALSE, message=FALSE}
+library(dplyr)
+library(ggplot2) 
+# library(tidyverse) # if you want more, but still core, toolkit
+```
+
+```{r load and clean data, echo=FALSE, warning=TRUE, message=FALSE}
+
+```
+
+
+
+```{R}
+library(haven)
+raw = read_sav("anes_timeseries_2020_spss_20210211/anes_timeseries_2020_spss_20210211.sav")
+# raw_dta = read_dta("anes_timeseries_2020_stata_20210211/anes_timeseries_2020_stata_20210211.dta")
+```
+
+```{R}
+# V201624: Anyone in household tested pos for COVID-19
+# 1 == someone in household tested positive, 287
+# 2 == no one tested positive, 7895
+# -5 == interview breakoff (sufficient partial IW), 38
+# -9 == refused, 60
+
+
+# V201625: Anyone in household been suspected of having COVID-19 based on symptoms
+# 1 == suspected of having COVID, 998
+# 2 == no one has been suspected of having COVID, 7185
+# -5 == interview breakoff (sufficient partial IW), 38
+# -9 == refused, 59
+
+# Of 287 people test positive for COVID, 73 reported no one has been suspected of COVID based on symptoms.
+sum(raw[raw$V201624 == 2, ]$V201625 == 1) 
+
+# V201145: Approve/Disapprove of governor's handling of COVID-19
+# 1 == Approve, 5083 (Magnitudes: 3212 strongly, 1862 not strongly, 1 don't know, 8 refused)
+# 2 == Disapprove, 3145 (Magnitudes: 2251 strongly, 893 not strongly, 1 refused)
+# -8 == Don't know, 16 
+# -9 == Refused, 36
+
+# V201146: How much Approve/Disapprove of governor's handling of COVID-19
+# 1 == Strongly, 5463
+# 2 == Not strongly, 2755
+# -1 == Inapplicable, 52
+# -8 == Don't know, 1
+# -9 == Refused, 9
+
+```
+
+Justification for using V201624:  
+There are 782 households who have had no one test positive, but suspect someone may have COVID based on symptoms.  
+We want to know how  having a family member with COVID affects one's approval of the governor's handling of COVID.
+The determination of whether a family member has COVID will rely on the ground truth: testing, not suspicion.
+It becomes a different question to ask how someone who thinks a family member may have COVID approves of the governor's handling of COVID.
+
+
+```{R}
+# Approach 1: Use 2 sample T-test and binary (metric) approve/disapprove values.
+# binary data IS metric data and ordinal
+
+# V201624: Anyone in household tested pos for COVID-19
+# 1 == someone in household tested positive, 287
+# 2 == no one tested positive, 7895
+# -5 == interview breakoff (sufficient partial IW), 38
+# -9 == refused, 60
+
+# V201145: Approve/Disapprove of governor's handling of COVID-19
+# 1 == Approve, 5083 (Magnitudes: 3212 strongly, 1862 not strongly, 1 don't know, 8 refused)
+# 2 == Disapprove, 3145 (Magnitudes: 2251 strongly, 893 not strongly, 1 refused)
+# -8 == Don't know, 16 
+# -9 == Refused, 36
+
+binary_T = raw[, c('V201624', 'V201145')]
+# all(raw$V201145 == binary_T$V201145)
+
+# Remove invalid values
+binary_T = binary_T[(binary_T$V201624 == 1 | binary_T$V201624 == 2), ] # remove -5 and -9 values for test pos for COVID
+binary_T = binary_T[(binary_T$V201145 == 1 | binary_T$V201145 == 2), ] # remove -8 and -9 values for binary governor approval
+
+# Normalize from 2 -> 0
+# 1 = (V201624) test positive        | (V201145) approve governor
+# 0 = (V201145) no one test positive | (V201145) disapprove governor
+binary_T[binary_T$V201624 == 2, 'V201624'] = 0
+binary_T[binary_T$V201145 == 2, 'V201145'] = 0
+
+# Ho: governor approval value if family infected == governor approval value if no one infected 
+# Ha: governor approval value if family infected != governor approval value if no one infected 
+
+# mean(binary_T[binary_T$V201624 == 1, ]$V201145) # test positive, 0.5598592
+# mean(binary_T[binary_T$V201624 == 0, ]$V201145) # no one test positive, 0.6208302
+
+test_positive = binary_T[binary_T$V201624 == 1, ]$V201145
+test_negative = binary_T[binary_T$V201624 == 0, ]$V201145
+t.test(test_positive, test_negative)
+# Ho is rejected at a 0.05 significance level. Individuals who have someone test positive are more likely to disapprove if governor.
+
+# Reporting means is not an intuitive measure
+library(effsize)
+cohen.d(test_positive, test_negative) # d estimate: -0.1255487 (negligible)
+
+cor(binary_T$V201145, binary_T$V201624) # -0.0230376
+
+```
+
+
+```{R}
+# Approach 2: Use Wilcoxon Ranked Sum and (ordinal) Likert (strong approval, non-strong approval, non-strong disapproval, strong disapproval) values.
+
+# V201624: Anyone in household tested pos for COVID-19
+# 1 == someone in household tested positive, 287
+# 2 == no one tested positive, 7895
+# -5 == interview breakoff (sufficient partial IW), 38
+# -9 == refused, 60
+
+# V201145: Approve/Disapprove of governor's handling of COVID-19
+# 1 == Approve, 5083 (Magnitudes: 3212 strongly, 1862 not strongly, 1 don't know, 8 refused)
+# 2 == Disapprove, 3145 (Magnitudes: 2251 strongly, 893 not strongly, 1 refused)
+# -8 == Don't know, 16 
+# -9 == Refused, 36
+
+# V201146: How much Approve/Disapprove of governor's handling of COVID-19
+# 1 == Strongly, 5463
+# 2 == Not strongly, 2755
+# -1 == Inapplicable, 52
+# -8 == Don't know, 1
+# -9 == Refused, 9
+
+ordinal_WRS = raw[, c('V201624', 'V201145', 'V201146')]
+
+# Remove invalid values
+ordinal_WRS = ordinal_WRS[(ordinal_WRS$V201624 == 1 | ordinal_WRS$V201624 == 2), ] # remove -5 and -9 values for test pos for COVID
+ordinal_WRS = ordinal_WRS[(ordinal_WRS$V201145 == 1 | ordinal_WRS$V201145 == 2), ] # remove -8 and -9 values for binary governor approval
+ordinal_WRS = ordinal_WRS[(ordinal_WRS$V201146 == 1 | ordinal_WRS$V201146 == 2), ] # remove -1, -8 and -9 values for ordinal governor approval
+
+# Normalize from 2 -> 0
+# 1 = (V201624) test positive        | (V201145) approve governor    | (V201146) strongly
+# 0 = (V201624) no one test positive | (V201145) disapprove governor | (V201146) not strongly
+ordinal_WRS[ordinal_WRS$V201624 == 2, 'V201624'] = 0
+ordinal_WRS[ordinal_WRS$V201145 == 2, 'V201145'] = 0
+ordinal_WRS[ordinal_WRS$V201146 == 2, 'V201146'] = 0
+
+ordinal_WRS$ordinal_approval = -1
+ordinal_WRS[(ordinal_WRS$V201145 == 1) & (ordinal_WRS$V201146 == 1), ]$ordinal_approval = 4 # strong approval
+ordinal_WRS[(ordinal_WRS$V201145 == 1) & (ordinal_WRS$V201146 == 0), ]$ordinal_approval = 3 # non-strong approval
+ordinal_WRS[(ordinal_WRS$V201145 == 0) & (ordinal_WRS$V201146 == 0), ]$ordinal_approval = 2 # non-strong disapproval
+ordinal_WRS[(ordinal_WRS$V201145 == 0) & (ordinal_WRS$V201146 == 1), ]$ordinal_approval = 1 # strong disapproval
+
+
+test_positive = ordinal_WRS[ordinal_WRS$V201624 == 1, ]$ordinal_approval
+test_negative = ordinal_WRS[ordinal_WRS$V201624 == 0, ]$ordinal_approval
+wilcox.test(test_positive, test_negative)
+
+
+```
+
+
+
+
+
+
+## Importance and Context
+<!-- You can (and should delete each of these comments lines in your final report) --> 
+<!-- Explain why the reader should care about your research question. -->
+
+Through 2020, the COVID-19 pandemic affected the lives of millions of Americans. At the time of writing, an estimated 28 million cases have been reported in the US, along with 500,000 deaths, \href{https://covid.cdc.gov/covid-data-tracker/#datatracker-home}{\underline(according to the CDC)}. 
+
+2020 was also an election year, during which gubernatorial (state-level) elections were held in 11 states and 2 territories, concurrently with the presidential election. 9 state governors ran for reelection. 
+
+We attempt to understand whether survey respondents who have had someone in their home infected by COVID-19 were more likely to disapprove of the way their governor is handling the pandemic. Having someone in their home infected by COVID-19 is one of the most intimate ways the pandemic may affect a survey respondent. We want to examine how this affect translates into a survey respondents' perception of their governor's handling of the pandemic. This is crucial, as 9 state governors were running for election in 2020. A marked disapproval could result in a changing power dynamic across many states.
+
+
+
+## Description of Data
+<!-- Explain how your research question is operationalized, including whether the variables you create are appropriate to study the concepts in question. --> 
+<!-- What are some basic features of the data distribution? --> 
+<!-- What changes do you make to the data and why? --> 
+
+Raw data originates from the pre-election survey that the American National Election Studies (ANES) conducts, the 2020 Time Series Study. Within this study of more than 700 variables, 4 were identified to be relevant to this analysis. No weighting was performed.
+
+There exists 2 variables that relate to whether a respondent may have been affected by COVID-19 in their household. One records "whether anyone in your household tested positive for COVID-19", while the other asks "whether anyone in your household has been suspected of having COVID-19 based on symptoms". Although related, these variables fundamentally differ. In this analysis, we choose to analyze respondents under the former variable. We believe relying on the ground truth - a positive or negative test result - is most appropriate. With the uncertainty that COVID-19 brings, we want to ensure respondents are not relying on gut feel or suspicion that a member of their household may have COVID-19.
+
+There exists 2 variables that attempt to gauge a respondent's perception of their governor's handling of COVID-19. One variable records a binary approval or disapproval response, while the other variable attempts to describe the magnitude of approval or disapproval, by allowing the respondent to select a strength (strongly, not strongly). We attempt to use both in our analysis.
+
+We remove entries in which respondents broke off an interview, refused to answer, or responded with "Don't know" or "inapplicable" to a survey question. These removed entries constituted 1.7% of our raw data. Some respondents may simply not have a well-formed opinion on their governor or may not have clear knowledge of their household's COVID-19 status. We believe the nature of this non-response is random, and not systematic in nature, so we believe removal of these entries will not bias the results of our analysis.
+
+We normalize binary responses to a scale of 0 to 1.  We create a custom field that combines a respondent's binary approval/disapproval of a governor with the respondent's strength in opinion (strongly, not strongly), which serves as an ordinal variable.
+
+We observe 284 respondents with someone in their household test positive for COVID-19. We observe 7854 respondents without a positive COVID-19 in the household.
+
+
+## Most appropriate test 
+<!-- Explain which test is the most appropriate to answer your question and why it is the most appropriate --> 
+<!-- List every assumption that your test requires and evaluate it. -->
+
+## Test, results and interpretation
+<!-- What are the results of your test? --> 
+<!-- What do the results of this test mean? What is the practical significance? --> 
