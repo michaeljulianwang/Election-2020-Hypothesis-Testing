@@ -1,5 +1,5 @@
 ---
-title: 'Lab 1: Question 1'
+title: 'Lab 1: Question 2'
 author: "Elaine Chang, Dom Dillingham, Jesse Miller, Michael Wang"
 output: pdf_document
 ---
@@ -19,13 +19,14 @@ library(dplyr)
 rawDat <- haven::read_dta('anes_timeseries_2020_stata_20210211/anes_timeseries_2020_stata_20210211.dta')
 
 ## Select fields & create understandable features
-dat <- rawDat %>% select(V201153, V201151, V201018, V201075x, V201228) %>%
+dat <- rawDat %>% select(V201153, V201151, V201018, V201075x, V201228, V200010a) %>%
   rename(Kamala_Meter = V201153,
          Biden_Meter = V201151,
          Party = V201018,
-         Voting_Party = V201075x) %>%
+         Voting_Party = V201075x,
+         weight = V200010a) %>%
   mutate(Voting_Party = case_when(Voting_Party %in% c(10, 20, 30) ~ 'Democrat',
-                           Party %in% c(11, 21, 31)~ 'Republican',
+                           Voting_Party %in% c(11, 21, 31)~ 'Republican',
                            TRUE ~ 'Other'))
 
 dat %<>% filter(Voting_Party == 'Democrat',
@@ -50,34 +51,22 @@ From Table 1 below, we see that the difference in thermometer between Joe Biden 
 
 ```{r distribution table, echo=FALSE, warning=TRUE, message=FALSE, results = 'asis'}
 tableDat <- dat %>% mutate(diff = Biden_Meter - Kamala_Meter) %>% summarise(`Record Count` = n(),
-                              `Average Kamala Harris Thermometer` = round(mean(Kamala_Meter), 2),
-                              `Average Joe Biden Thermometer` = round(mean(Biden_Meter), 2),
+                              `Average Harris Thermometer` = round(mean(Kamala_Meter), 2),
+                              `Average Biden Thermometer` = round(mean(Biden_Meter), 2),
                               `Average Difference` = round(mean(diff), 2))
-kable(tableDat, caption = 'Data Distribution by Candidate')
+kable(tableDat, caption = 'Data Distribution by Politician')
 ```
 
-From the table below, we see that, along with a small difference in mean, there isn't a strong visual difference between the distributions of thermometer by Joe Biden and Kamala Harris though Kamala Harris has a higher distribution near 50.
-
-```{r graphic distribution, echo=FALSE, warning=TRUE, message=FALSE}
-stackedDat <- melt(dat %>% select(Kamala_Meter, Biden_Meter)) %>%
-  mutate(variable = case_when(variable == 'Kamala_Meter' ~ 'Kamala Harris',
-                              TRUE ~ 'Joe Biden'))
-
-ggplot(stackedDat, aes(variable, value)) +
-  geom_violin() +
-  labs(title="Violin of Thermometer",
-       x="Candidate",
-       y="Candidate Thermometer")
-```
+From the table below, we see that the difference between Joe Biden and Kamala Harris is fairly symmetric with a large point-mass around zero where respondants equally fair both politicians.  
 
 ```{r graphic distribution type2, echo=FALSE, warning=TRUE, message=FALSE}
-dat %<>% mutate(diff = Kamala_Meter - Biden_Meter)
+dat %<>% mutate(diff =  Biden_Meter - Kamala_Meter)
 
 ggplot(dat, aes(x=diff)) +
   geom_histogram(color="black", fill="white") +
   geom_vline(aes(xintercept=mean(diff)),
             color="blue", linetype="dashed", size=1) +
-  labs(title="Difference Between Kamala Harris & Joe Biden",
+  labs(title="Difference Between Joe Biden & Kamala Harris",
        x="Difference in Thermometer",
        y="Number of Responses")
 
@@ -86,14 +75,14 @@ ggplot(dat, aes(x=diff)) +
 ## Most appropriate test
 The most appropriate test for this analysis a Wilcoxon Signed Rank Test. For this problem, a paired statistical test is prefered as we are not controlling for the influence of other factors that may impact the difference such as age and historical voting patterns, which a paired test will help account for. Within the range of paired test, the Wilcoxon Signed Rank Test pass all the tests assumptions while providing the most power. The assumptions are:
 
-* Metric scale - The thermometer is a metric scale?
+* Metric scale - The thermometer is on a metric scale. 
 * Paired dependent samples - Each of the drawings are paired dependent samples as the same individual would be asked both questions.
 * Difference between samples is symmetric about mean - From the graph above, it does appear that the data is symmetric about the mean.
-* Paid is drawn IID - ?
+* Data is drawn IID - This data does not fully align with the properties of IID. From the properties of the survey, some individuals are more likely to be sampled and weights to account for this sampling bias were provided. For the purposes of this analysis, these weights were ignored.
 
 ## Test, results and interpretation
 ```{r test, echo=FALSE, warning=TRUE, message=FALSE}
-wilcox.test(dat$Kamala_Meter, dat$Biden_Meter, paired = TRUE, alternative = "two.sided")
+wilcox.test(dat$Biden_Meter, dat$Kamala_Meter, paired = TRUE, alternative = "two.sided")
 ```
 The result of the statisical test indicate that, with an alpha-level of 0.05, we reject the null hypothesis that the difference bewteen thermometers of Joe Biden and Kamala Harris are 0.
 
