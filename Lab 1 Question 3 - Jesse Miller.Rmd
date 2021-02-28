@@ -1,0 +1,126 @@
+---
+title: "Lab 1 Question 3: Are survey respondents who have had someone in their home infected by COVID-19 more likely to disapprove of the way their governor is handling the pandemic?"
+output: pdf_document
+---
+\newpage 
+
+```{r, echo=FALSE, include=FALSE}
+#load library tidyverse and haven
+
+library(tidyverse)
+library(haven)
+library(magrittr)
+library(knitr)
+library(patchwork)
+```
+
+```{r, echo=FALSE, message = FALSE}
+#load dataset and pull columns of interest
+
+anes_timeseries_2020_stata_20210211 <- read_dta("anes_timeseries_2020_stata_20210211.dta")
+
+df <- anes_timeseries_2020_stata_20210211 %>%
+   select(V200010a,V201145,V201146,V201624,V201625) %>%
+   rename(WEIGHT=V200010a,COVIDAPP_GOVERNOR=V201145,COVIDAPP_GOVERNORSTR=V201146,HLTH_COVIDPOS=V201624,HLTH_COVIDSYM=V201625)
+
+#Create functions to turn response numbers into strings
+
+yes_no <- function(x) {
+  if (x==1) {
+'Yes'
+} else if (x==2){
+'No'
+} else {
+NULL
+}
+}
+
+approve_dis <- function(x) {
+  if (x==1) {
+'Approve'
+} else if (x==2){
+'Disapprove'
+} else {
+NULL
+}
+}
+```
+
+# 1. Introduction
+As Americans went to the polls on November 3rd 2020, almost all Americans had been affected in some form or another by the COVID-19 pandemic, but relatively few Americans had actually experienced a COVID-19 infection. In early Nov 2020, the US had recorded 10 Million confirmed COVID cases (approximately 3% of the population). Do these Americans and their loved ones feel differently about their elected officials than Americans who did not personally experience a COVID-19 infection?\
+\
+In this analysis we will examine the above question, and specifically test whether survey respondents who had someone in their household infected by COVID-19 are more likely to disapprove of the way their governor is handling the pandemic when compared with respondents that did not have someone in their household infected by COVID-19. This is a critical question because respondents who had someone in their home infected by COVID-19 are, simply put, the people who were most affected by their governor's handling of the pandemic. This analysis seeks to give voice to this minority group of Americans by determining whether they responded to the survey differently.
+
+# 2. Data
+We begin by pulling our samples from the dataset. The samples remove any respondents that failed to answer either one of the questions we are addressing in our analysis. Per instruction from our professor, we will not attempt to apply the weights in the dataset, and thus will treat the samples as if they are independently and identically distributed random samples from two populations.
+
+```{r, echo=FALSE,message=FALSE}
+df2 <- df %>%
+  select(HLTH_COVIDPOS,COVIDAPP_GOVERNOR) %>%
+  filter(HLTH_COVIDPOS %in% c(1,2)) %>%
+  filter(COVIDAPP_GOVERNOR %in% c(1,2)) %>%
+  mutate(COVIDAPP_GOVERNOR=sapply(COVIDAPP_GOVERNOR,approve_dis),HLTH_COVIDPOS=sapply(HLTH_COVIDPOS,yes_no)) %>%
+  group_by(HLTH_COVIDPOS,COVIDAPP_GOVERNOR) %>%
+  summarise(Number_of_Respondents=n())
+
+CPOS_Samp <- df2 %>%
+  filter(HLTH_COVIDPOS=='Yes') %>%
+  mutate(percent_of_respondents=round(Number_of_Respondents/sum(Number_of_Respondents),digits = 2))
+
+CNEG_Samp <- df2 %>%
+  filter(HLTH_COVIDPOS=='No') %>%
+  mutate(percent_of_respondents=round(Number_of_Respondents/sum(Number_of_Respondents),digits = 2))
+```
+\
+We find that in the sample of Americans who had someone in their home infected by COVID-19, 44% disapproved of their governor's handling the pandemic, and in the sample of Americans who did not have someone in their home infected by COVID-19, 38% disapproved of their governor's handling the pandemic.
+\
+
+```{r, echo=FALSE}
+kable(CPOS_Samp,
+      format = 'simple',
+      col.names = c('COVID Case in Household?','Approve of Governor?','Count','Percent'),
+      align = "llll",
+      caption = 'Households With a Confirmed COVID Case')
+```
+
+```{r, echo=FALSE}
+kable(CNEG_Samp,
+      format = 'simple',
+      col.names = c('COVID Case in Household?','Approve of Governor?','Count','Percent'),
+      align = "llll",
+      caption = 'Households Without a Confirmed COVID Case')
+```
+```{r, echo=FALSE}
+
+```
+
+# 3. Test
+We want to test the difference between two population proportions, the proportion that disapproves of their Governor's handling of covid-19 in the population that had a confirmed COVID-19 case in their household, compared with the proportion that disapproves of their Governor's handling of COVID-19 in the population that did not have a confirmed COVID-19 case in their household. To do this we can calculate a Z statistic comparing the difference in the sample proportions against the null hypothesis that there is no difference in the population proportions. To reject the null hypothesis, we will need a p-value in either tail that exceeds 0.025.
+
+\
+The assumptions underlying this test are:\
+\
+1. The samples drawn from the two populations are random samples that are independently and identically distributed.\
+2. The sample size is large enough that it closely approximates a normal distribution.
+\
+```{r}
+z_statistic <- function(X,Y,m,n) {
+  p1 = X/m
+  p2 = Y/n
+  p = (X+Y)/(m+n)
+  q = 1-p
+  ((p1)-(p2))/sqrt((p*q)*((1/n)+(1/m)))
+}
+
+z_statistic(X=125,Y=2978,m=284,n=7854)
+
+1-pnorm(2.078,0,1)
+```
+\
+\
+We find that our p value is less than .025 and we can reject the null hypothesis.
+
+# 4. Significance
+Although we have rejected the null hypothesis, the significance of the result is questionable for two reasons: 1) our sampling method is highly vulnerable to bias; 2) although the 6% difference in proportion between the two samples is statistically significant, even if the two populations exactly mirrored this difference, the practical significance is relatively low. We find that in either case the majority of the two populations approve of their Governor's handling of COVID-19.\
+\
+Bias occurs when the expected value of our estimator is not equal to the true value in the population $E[\hat\theta] \neq \theta$. This commonly occurs when one is sampling from a group that does not truly represent the population, therefore increasing the number of samples drawn from that group simply brings one closer to the true value for a different population. In our analysis there is a real danger of this. The ANES dataset takes steps to ensure its respondents represent a random sample of the population of all Americans, but we have not applied the weights and adjustments that ANES advises are necessary to achieve this. Furthermore, when we divide the ANES sample into a sample of 284 respondents that had a confirmed COVID-19 case in their household, and a sample of 7,854 respondents that did not, our samples may no longer reflect true random draws from their populations. To illustrate this problem further with a simple example: our sample of 284 respondents that had a confirmed COVID-19 case in their household could have overdrawn from 1 state with a particularly bad governor, and thus not reflect a random sample from the population of Americans overall that had a confirmed COVID-19 case in their household.
