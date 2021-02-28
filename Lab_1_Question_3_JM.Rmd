@@ -52,7 +52,13 @@ As Americans went to the polls on November 3rd 2020, almost all Americans had be
 In this analysis we will examine the above question, and specifically test whether survey respondents who had someone in their household infected by COVID-19 are more likely to disapprove of the way their governor is handling the pandemic when compared with respondents that did not have someone in their household infected by COVID-19. This is a critical question because respondents who had someone in their home infected by COVID-19 are, simply put, the people who were most affected by their governor's handling of the pandemic. This analysis seeks to give voice to this minority group of Americans by determining whether they responded to the survey differently.
 
 # 2. Data
-We begin by pulling our samples from the dataset. The samples remove any respondents that failed to answer either one of the questions we are addressing in our analysis. Per instruction from our professor, we will not attempt to apply the weights in the dataset, and thus will treat the samples as if they are independently and identically distributed random samples from two populations.
+We begin by pulling our samples from the dataset. For our analysis we will look at responses to two questions:\
+\
+1. V201624: Has anyone in your household tested positive for the coronavirus disease, COVID-19, or has no one tested positive? (1. Someone in my household tested positive; 2. No one tested positive; -5. Interview breakoff (sufficient partial IW); -9. Refused).\
+\
+2. V201145: Do you approve or disapprove of the way [Governor of respondent’s preloaded state] has handled the COVID-19 pandemic? (1. Approve; 2. Disapprove; -8. Don’t know; -9. Refused).\
+\
+For our samples we remove any respondents that failed to answer either one of the above with a 1 or 2. Per instruction from our professor, we do not attempt to apply the weights in the dataset, and thus will treat simply treat the samples as if they are independently and identically distributed random samples from the two populations in question. This is not necessarily a good assumption, and we will discuss it further in section 4 on the significance of our results.
 
 ```{r, echo=FALSE,message=FALSE}
 df2 <- df %>%
@@ -72,7 +78,7 @@ CNEG_Samp <- df2 %>%
   mutate(percent_of_respondents=round(Number_of_Respondents/sum(Number_of_Respondents),digits = 2))
 ```
 \
-We find that in the sample of Americans who had someone in their home infected by COVID-19, 44% disapproved of their governor's handling the pandemic, and in the sample of Americans who did not have someone in their home infected by COVID-19, 38% disapproved of their governor's handling the pandemic.
+We find that in the sample of Americans with a confirmed COVID case in their household, 44% disapproved of their governor's handling the pandemic, and in the sample of Americans with no confirmed COVID case in their household, 38% disapproved of their governor's handling the pandemic.
 \
 
 ```{r, echo=FALSE}
@@ -95,13 +101,31 @@ kable(CNEG_Samp,
 ```
 
 # 3. Test
-We want to test the difference between two population proportions, the proportion that disapproves of their Governor's handling of covid-19 in the population that had a confirmed COVID-19 case in their household, compared with the proportion that disapproves of their Governor's handling of COVID-19 in the population that did not have a confirmed COVID-19 case in their household. To do this we can calculate a Z statistic comparing the difference in the sample proportions against the null hypothesis that there is no difference in the population proportions. To reject the null hypothesis, we will need a p-value in either tail that exceeds 0.025.
+We want to test the difference between two population proportions. Our two populations are: 1) American's with a confirmed COVID case in their household; and 2) Americans without a confirmed COVID case in their household. We want to compare the proportion that disapproves of their Governor's handling of COVID-19 in these two populations. 
+\
+\
+To do this we can calculate a Z statistic comparing the difference in the sample proportions against the null hypothesis that there is no difference in the population proportions. The formula for running such a test is:
 
+$$
+Z = \frac{\hat p_1 - \hat p_2-0}{\sqrt{pq(\frac{1}{m}+\frac{1}{n})}}
+$$
+\
+Where $\hat p_1=\frac{X}{m}$ with $X$ = the number of respondents that disapprove over $m$= the number of respondents in the sample, $\hat p_2=\frac{Y}{n}$ with $Y$ = the number of respondents that disapprove over $n$= the number of respondents in the sample, $p = \frac{(X+Y)}{m+n}$, and $q=1-p$.
+\
+\
+We are able to use a Z statistic and the above formula because of the central limit theorem and the fact that the two populations in question follow a know distribution (the binomial distribution), this follows ipso facto from the from the nature of the question at hand (it is a yes/no question, approve or disapprove).
+\
+\
+To reject the null hypothesis, we will need a p-value in either tail that exceeds 0.025.
+\
 \
 The assumptions underlying this test are:\
 \
 1. The samples drawn from the two populations are random samples that are independently and identically distributed.\
-2. The sample size is large enough that it closely approximates a normal distribution.
+\
+2. The sample size is large enough that it closely approximates a normal distribution.\
+\
+3. The two populations each follow a known distribution (the binomial distribution).
 \
 ```{r}
 z_statistic <- function(X,Y,m,n) {
@@ -114,7 +138,7 @@ z_statistic <- function(X,Y,m,n) {
 
 z_statistic(X=125,Y=2978,m=284,n=7854)
 
-1-pnorm(2.078,0,1)
+1-pnorm(2.078242,0,1)
 ```
 \
 \
