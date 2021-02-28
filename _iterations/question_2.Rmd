@@ -73,9 +73,9 @@ ggplot(dat, aes(x=diff)) +
 ```
 
 ## Most appropriate test
-The most appropriate test for this analysis a Wilcoxon Signed Rank Test. For this problem, a paired statistical test is prefered as we are not controlling for the influence of other factors that may impact the difference such as age and historical voting patterns, which a paired test will help account for. Within the range of paired test, the Wilcoxon Signed Rank Test pass all the tests assumptions while providing the most power. The assumptions are:
+The most appropriate test for this analysis a Wilcoxon Signed Rank Test. For this problem, a paired statistical test is prefered as we are not controlling for the influence of other factors that may impact the difference such as age and historical voting patterns, which a paired test will help account for. Within the range of paired test, the Wilcoxon Signed Rank Test passes or nearly misses assumptions while providing the most power. The assumptions are:
 
-* Metric scale - The thermometer is on a metric scale. 
+* Metric scale - The thermometer is not on a metric scale. The thermometer measurements are bounded to be within the range [0, 100]. 
 * Paired dependent samples - Each of the drawings are paired dependent samples as the same individual would be asked both questions.
 * Difference between samples is symmetric about mean - From the graph above, it does appear that the data is symmetric about the mean.
 * Data is drawn IID - This data does not fully align with the properties of IID. From the properties of the survey, some individuals are more likely to be sampled and weights to account for this sampling bias were provided. For the purposes of this analysis, these weights were ignored.
