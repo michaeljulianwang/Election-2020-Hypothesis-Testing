@@ -1,0 +1,318 @@
+---
+title: "Lab 1: Question 3: Are survey respondents who have had someone in their home infected by COVID-19 more likely to disapprove of the way their governor is handling the pandemic?"
+author:
+- Elaine Chang
+- Dom Dillingham
+- Jesse Miller
+- Michael Wang
+output: pdf_document
+---
+\newpage 
+
+```{r, echo=FALSE, include=FALSE}
+#load library tidyverse and haven
+
+library(tidyverse)
+library(haven)
+library(magrittr)
+library(knitr)
+library(patchwork)
+```
+
+```{r, echo=FALSE, message = FALSE}
+#load dataset and pull columns of interest
+
+anes_timeseries_2020_stata_20210211 <- read_dta("anes_timeseries_2020_stata_20210211/anes_timeseries_2020_stata_20210211.dta")
+
+df <- anes_timeseries_2020_stata_20210211 %>%
+   select(V200010a,V201145,V201146,V201624,V201625) %>%
+   rename(WEIGHT=V200010a,COVIDAPP_GOVERNOR=V201145,COVIDAPP_GOVERNORSTR=V201146,HLTH_COVIDPOS=V201624,HLTH_COVIDSYM=V201625)
+
+#Create functions to turn response numbers into strings
+
+yes_no <- function(x) {
+  if (x==1) {
+'Yes'
+} else if (x==2){
+'No'
+} else {
+NULL
+}
+}
+
+approve_dis <- function(x) {
+  if (x==1) {
+'Approve'
+} else if (x==2){
+'Disapprove'
+} else {
+NULL
+}
+}
+```
+
+
+
+```{R, echo=FALSE,message=FALSE,results='hide'}
+library(haven)
+raw = read_sav("anes_timeseries_2020_spss_20210211/anes_timeseries_2020_spss_20210211.sav")
+# raw_dta = read_dta("anes_timeseries_2020_stata_20210211/anes_timeseries_2020_stata_20210211.dta")
+
+# V201624: Anyone in household tested pos for COVID-19
+# 1 == someone in household tested positive, 287
+# 2 == no one tested positive, 7895
+# -5 == interview breakoff (sufficient partial IW), 38
+# -9 == refused, 60
+
+
+# V201625: Anyone in household been suspected of having COVID-19 based on symptoms
+# 1 == suspected of having COVID, 998
+# 2 == no one has been suspected of having COVID, 7185
+# -5 == interview breakoff (sufficient partial IW), 38
+# -9 == refused, 59
+
+# Of 287 people test positive for COVID, 73 reported no one has been suspected of COVID based on symptoms.
+# sum(raw[raw$V201624 == 2, ]$V201625 == 1) 
+
+# V201145: Approve/Disapprove of governor's handling of COVID-19
+# 1 == Approve, 5083 (Magnitudes: 3212 strongly, 1862 not strongly, 1 don't know, 8 refused)
+# 2 == Disapprove, 3145 (Magnitudes: 2251 strongly, 893 not strongly, 1 refused)
+# -8 == Don't know, 16 
+# -9 == Refused, 36
+
+# V201146: How much Approve/Disapprove of governor's handling of COVID-19
+# 1 == Strongly, 5463
+# 2 == Not strongly, 2755
+# -1 == Inapplicable, 52
+# -8 == Don't know, 1
+# -9 == Refused, 9
+
+```
+
+
+
+```{R, echo=FALSE,message=FALSE, results='hide'}
+# Approach 1: Use 2 sample T-test and binary (metric) approve/disapprove values.
+# binary data IS metric data and ordinal
+
+# V201624: Anyone in household tested pos for COVID-19
+# 1 == someone in household tested positive, 287
+# 2 == no one tested positive, 7895
+# -5 == interview breakoff (sufficient partial IW), 38
+# -9 == refused, 60
+
+# V201145: Approve/Disapprove of governor's handling of COVID-19
+# 1 == Approve, 5083 (Magnitudes: 3212 strongly, 1862 not strongly, 1 don't know, 8 refused)
+# 2 == Disapprove, 3145 (Magnitudes: 2251 strongly, 893 not strongly, 1 refused)
+# -8 == Don't know, 16 
+# -9 == Refused, 36
+
+binary_T = raw[, c('V201624', 'V201145')]
+# all(raw$V201145 == binary_T$V201145)
+
+# Remove invalid values
+binary_T = binary_T[(binary_T$V201624 == 1 | binary_T$V201624 == 2), ] # remove -5 and -9 values for test pos for COVID
+binary_T = binary_T[(binary_T$V201145 == 1 | binary_T$V201145 == 2), ] # remove -8 and -9 values for binary governor approval
+
+# Normalize from 2 -> 0
+# 1 = (V201624) test positive        | (V201145) approve governor
+# 0 = (V201145) no one test positive | (V201145) disapprove governor
+binary_T[binary_T$V201624 == 2, 'V201624'] = 0
+binary_T[binary_T$V201145 == 2, 'V201145'] = 0
+
+# Ho: governor approval value if family infected == governor approval value if no one infected 
+# Ha: governor approval value if family infected != governor approval value if no one infected 
+
+# mean(binary_T[binary_T$V201624 == 1, ]$V201145) # test positive, 0.5598592
+# mean(binary_T[binary_T$V201624 == 0, ]$V201145) # no one test positive, 0.6208302
+
+test_positive = binary_T[binary_T$V201624 == 1, ]$V201145
+test_negative = binary_T[binary_T$V201624 == 0, ]$V201145
+t.test(test_positive, test_negative)
+# Ho is rejected at a 0.05 significance level. Individuals who have someone test positive are more likely to disapprove if governor.
+
+# Reporting means is not an intuitive measure
+library(effsize)
+cohen.d(test_positive, test_negative) # d estimate: -0.1255487 (negligible)
+
+cor(binary_T$V201145, binary_T$V201624) # -0.0230376
+
+```
+
+
+
+
+
+```{R, echo=FALSE,message=FALSE, results='hide'}
+# Approach 2: Use Wilcoxon Ranked Sum and (ordinal) Likert (strong approval, non-strong approval, non-strong disapproval, strong disapproval) values.
+
+# V201624: Anyone in household tested pos for COVID-19
+# 1 == someone in household tested positive, 287
+# 2 == no one tested positive, 7895
+# -5 == interview breakoff (sufficient partial IW), 38
+# -9 == refused, 60
+
+# V201145: Approve/Disapprove of governor's handling of COVID-19
+# 1 == Approve, 5083 (Magnitudes: 3212 strongly, 1862 not strongly, 1 don't know, 8 refused)
+# 2 == Disapprove, 3145 (Magnitudes: 2251 strongly, 893 not strongly, 1 refused)
+# -8 == Don't know, 16 
+# -9 == Refused, 36
+
+# V201146: How much Approve/Disapprove of governor's handling of COVID-19
+# 1 == Strongly, 5463
+# 2 == Not strongly, 2755
+# -1 == Inapplicable, 52
+# -8 == Don't know, 1
+# -9 == Refused, 9
+
+ordinal_WRS = raw[, c('V201624', 'V201145', 'V201146')]
+
+# Remove invalid values
+ordinal_WRS = ordinal_WRS[(ordinal_WRS$V201624 == 1 | ordinal_WRS$V201624 == 2), ] # remove -5 and -9 values for test pos for COVID
+ordinal_WRS = ordinal_WRS[(ordinal_WRS$V201145 == 1 | ordinal_WRS$V201145 == 2), ] # remove -8 and -9 values for binary governor approval
+ordinal_WRS = ordinal_WRS[(ordinal_WRS$V201146 == 1 | ordinal_WRS$V201146 == 2), ] # remove -1, -8 and -9 values for ordinal governor approval
+
+# Normalize from 2 -> 0
+# 1 = (V201624) test positive        | (V201145) approve governor    | (V201146) strongly
+# 0 = (V201624) no one test positive | (V201145) disapprove governor | (V201146) not strongly
+ordinal_WRS[ordinal_WRS$V201624 == 2, 'V201624'] = 0
+ordinal_WRS[ordinal_WRS$V201145 == 2, 'V201145'] = 0
+ordinal_WRS[ordinal_WRS$V201146 == 2, 'V201146'] = 0
+
+ordinal_WRS$ordinal_approval = -1
+ordinal_WRS[(ordinal_WRS$V201145 == 1) & (ordinal_WRS$V201146 == 1), ]$ordinal_approval = 4 # strong approval
+ordinal_WRS[(ordinal_WRS$V201145 == 1) & (ordinal_WRS$V201146 == 0), ]$ordinal_approval = 3 # non-strong approval
+ordinal_WRS[(ordinal_WRS$V201145 == 0) & (ordinal_WRS$V201146 == 0), ]$ordinal_approval = 2 # non-strong disapproval
+ordinal_WRS[(ordinal_WRS$V201145 == 0) & (ordinal_WRS$V201146 == 1), ]$ordinal_approval = 1 # strong disapproval
+
+
+test_positive = ordinal_WRS[ordinal_WRS$V201624 == 1, ]$ordinal_approval
+test_negative = ordinal_WRS[ordinal_WRS$V201624 == 0, ]$ordinal_approval
+wilcox.test(test_positive, test_negative)
+
+library(effsize)
+cohen.d(test_positive, test_negative) # d estimate: -0.1255487 (negligible)
+
+cor(ordinal_WRS$V201624, ordinal_WRS$ordinal_approval) # -0.0230376
+```
+
+
+
+
+
+
+# 1. Introduction
+2020 was marked by the novel COVID-19 pandemic. Nearly all Americans experienced changes to their lives, but perhaps those whose lives were most affected were those with a COVID-19 infection themselves or within their immediate households. In early November 2020, the US had recorded 10 million confirmed COVID-19 cases. How do these infected Americans and their households feel about how their elected officials handled the pandemic?
+
+In this analysis, we test whether survey respondents who had someone in their household infected by COVID-19 are more likely to disapprove of the way their governor is handling the pandemic when compared with respondents without household infection of COVID-19. This research question poses far-reaching implications on the democratic process. 2020 was a crucial election year, during which gubernatorial elections were held in 11 states and 2 territories, concurrently with the presidential election. A stark change in perception of a governor's ability to navigate a crisis could swing leadership in up to 9 states where governors ran for reelection, and affect the political balance in more states during mid-term elections.
+
+
+
+# 2. Data
+
+Raw data originates from the 2020 Time Series Study, a pre-election survey that the American National Election Studies (ANES) conducted on 8,280 eligible voters in the United States. Each survey question corresponds to a variable in the dataset. Within this dataset of more than 700 variables, 4 were identified to be relevant to this analysis:
+
+1. V201624: Has anyone in your household tested positive for the coronavirus disease, COVID-19, or has no one tested positive?
+
+2. V201625: Has anyone in your household been suspected of having COVID-19 based on their symptoms, or not?
+
+3. V201145: Do you approve or disapprove of the way [governor] has handled the COVID-19 pandemic?
+
+4. V201146: Do you [approve/disapprove] strongly or not strongly?
+
+\
+
+We remove entries in which survey respondents failed to answer the above questions with a binary response. These instances included when the survey respondent broke off an interview, refused to answer, or responded with "Don't know" or "Inapplicable". These removed entries constituted 1.7% of the raw data. We believe the nature of this non-response is random, not systematic, so we believe the removal of these entries will not bias the results of our analysis. We also normalize binary responses onto a scale of 0 to 1.
+
+We operationalize a respondent who has someone in their home infected by COVID-19 by examining two variables: V201624 and V201625. Although similar, the former variable depends on the result of a COVID-19 test, while the latter variable simply asks the respondent of their suspicion of a household member with COVID-19 due to symptoms. In this analysis, we choose to analyze respondents under the lens of the former, test-driven variable, V201624. Although we recognize this may bias our results against respondents who are unable to receive a COVID-19 test, we believe relying on the ground truth - a positive or negative test result - is most appropriate.
+
+We operationalize a respondent's perception of how their governor handles COVID-19 using two variables: V201145 and V201146. The former variable records a binary response (approval or disapproval), while the latter variable records the magnitude of response (strongly or not strongly). We create an additional ordinal variable that combines a respondent's binary approval of a governor with the respondent's strength in opinion. This variable serves as a Likert scale variable with 4 categories: strongly disapprove, disapprove, approve, and strongly approve.
+
+No weighting was applied in this analysis. There are flaws to this assumption, which will be discussed in *Section 4: Significance*.
+
+
+```{r, echo=FALSE,message=FALSE}
+df2 <- df %>%
+  select(HLTH_COVIDPOS,COVIDAPP_GOVERNOR) %>%
+  filter(HLTH_COVIDPOS %in% c(1,2)) %>%
+  filter(COVIDAPP_GOVERNOR %in% c(1,2)) %>%
+  mutate(COVIDAPP_GOVERNOR=sapply(COVIDAPP_GOVERNOR,approve_dis),HLTH_COVIDPOS=sapply(HLTH_COVIDPOS,yes_no)) %>%
+  group_by(HLTH_COVIDPOS,COVIDAPP_GOVERNOR) %>%
+  summarise(Number_of_Respondents=n())
+
+CPOS_Samp <- df2 %>%
+  filter(HLTH_COVIDPOS=='Yes') %>%
+  mutate(percent_of_respondents=100 * round(Number_of_Respondents/sum(Number_of_Respondents),digits = 2))
+
+CNEG_Samp <- df2 %>%
+  filter(HLTH_COVIDPOS=='No') %>%
+  mutate(percent_of_respondents=100 * round(Number_of_Respondents/sum(Number_of_Respondents),digits = 2))
+```
+\
+Basic observations of the data indicate 284 respondents with someone in their household who tested positive for COVID-19, of which 44% disapproved of their governor's handling of the pandemic. Conversely, of the 7,854 respondents without a positive COVID-19 case in their household, 38% disapproved of their governor's handling of the pandemic. From a cursory analysis, the means of the data indicate survey respondents who have had someone in their home infected by COVID-19 may be more likely to disapprove of the way their governor is handling the pandemic, but statistical tests need to be performed in order to evaluate statistical significance.
+\
+
+```{r, echo=FALSE}
+kable(CPOS_Samp,
+      format = 'simple',
+      col.names = c('COVID Case in Household?','Approve of Governor?','Count','Percent'),
+      align = "llll",
+      caption = 'Households With a Confirmed COVID Case')
+```
+
+```{r, echo=FALSE}
+kable(CNEG_Samp,
+      format = 'simple',
+      col.names = c('COVID Case in Household?','Approve of Governor?','Count','Percent'),
+      align = "llll",
+      caption = 'Households Without a Confirmed COVID Case')
+```
+
+# 3. Tests
+
+We approach the research question through the interpretation that disapproval exists on a spectrum. For example, two respondents may report they "Approve" and "Strongly Approve" of their respective governors. While both respondents approve of their governors, the former respondent disapproves of their governor to a relatively greater degree than the latter respondent who approves more strongly. We aim to capture this ordinal relationship by implementing a non-parametric Wilcoxon Ranked Sum test.
+
+A non-parametric Wilcoxon Ranked Sum (WRS) hypothesis of comparisons test accounts for respondents' relative approval of how their governor handles COVID-19. Our sample data is split into two groups: those with household members who tested positive for COVID-19, and those without. Relative approval of the respondent's governor is defined by a custom categorical feature that contains the values: strongly disapprove, disapprove, approve, and strongly approve. This feature is generated by combining the binary approval or disapproval rating respondents report (V201145) with their strength in opinion (V201146). 
+
+A WRS hypothesis of comparisons tests is appropriate because it meets the following core assumptions:
+
+1. **Ordinal data.** The custom variable we create, which combines the binary nature of V201145 and the magnitudes of V201145, is an ordinal data type. We cannot, and do not attempt to, make comparisons beyond the <, >, or = operators, because we recognize the intervals between categories are subjective.
+
+2. **Independently and identically distributed (IID) data draws.** This assumption is likely violated to some degree. It is highly unlikely all survey respondents are truly independently selected. The ANES Guidebook states a large subset of survey respondents are return respondents from the 2016 ANES survey, which indicates survey respondents in 2020 have a dependence upon prior affiliation with ANES. Additionally, it is unlikely survey respondents are identically distributed across the population of all eligible US voters, especially as no weight adjustments have been applied in this analysis. Despite these violations, we have a large sample of ~8,000 survey respondents who have been sampled across 50 states, and we operate under the assumption that our data does not violate the IID assumption too badly. Other hypothesis tests also require an IID assumption, so we believe a WRS test violates this assumption no more than other tests.
+
+Although we notice the size of the with-COVID (284) and without-COVID (7,854) groups differ by a substantial margin, the Ranked Sum Test will normalize for the difference in sample sizes across the two groups. We opt for a WRS test over a dependent Wilcoxon Sign Rank Test or Sign Test because there exists no logical pairing across the two groups. We opt for a WRS test over a z-test because we have minimal knowledge about the population distributions of the two groups. We opt for a WRS test over a t-test because we aim to capture the respondents' strength in opinion of their governor, and a t-test would fail to account for this ordinal relationship.
+
+We operationalize our test according to the following hypotheses:
+
+- Ho: The probability of a draw from the with-COVID group ranking higher than a draw from the without-COVID group is equal to the probability of a draw from the without-COVID group ranking higher than a draw from the with-COVID group.
+
+- Ha: The probability of a draw from the with-COVID group ranking higher than a draw from the without-COVID group is not equal to the probability of a draw from the without-COVID group ranking higher than a draw from the with-COVID group.
+
+Assuming an industry-standard significance level, $\alpha$, of 5% across two tails, a WRS test yields a p-value of 0.042. Because this p-value is less than our significance level, the test implies a statistically significant finding that the null hypothesis should be rejected. Specifically, the probability of a with-COVID respondent holding a more disapproving opinion of their governor is greater than the probability of a without-COVID respondent reporting a similar degree of disapproval. The with-COVID group has a mean disapproval of 44%, while the without-COVID group has a mean disapproval of 37%. We calculate a Cohen's d estimate, a measure of the difference between sample means in standard deviation units, of -0.12. This implies negligible significance. Similarly, we compute a correlation of -0.022, which indicates a weak correlation between the two groups.
+
+
+<!-- 1. **Metric data.** Because we are disregarding strength of a respondent's feelings toward their governor, the binary nature of approval or disapproval is metric in nature. Metric data, by definition, is data in which there is a meaningful difference between two values. Binary data is metric data, albeit very simple metric data, and thus satisfies this criteria of the t-test.\ -->
+
+
+<!-- 3. **Normality.** Due to the large sample sizes of both the with-COVID group (284) and the without-COVID group (7,854), we expect the Central Limit Theorem to apply and for there to exist minimal deviations from normality. Both groups are far greater than the recommended minimum sample size of 30.\ -->
+
+<!-- - Ho: The mean value observed across the with-COVID and without-COVID groups is equal to 0.\ -->
+
+<!-- - Ha: the mean value observed across the with-COVID and without-COVID groups does not equal 0.\ -->
+
+<!-- Assuming an industry-standard significance level, $\alpha$, of 5% across two tails, a two-sample t-test yields a p-value of 0.043, which implies a statistically significant finding that the null hypothesis should be rejected, and that the means across the two groups is unequal. The with-COVID group has a mean disapproval of 44.0%, while the without-COVID group has a mean disapproval of 37.9%. We calculate a Cohen's d estimate, a measure of the difference between sample means in standard deviation units, of -0.13. This implies negligible significance. Similarly, we compute a correlation of -0.023, which similarly indicates a weak correlation between the two groups. \ -->
+ \hypersetup{
+   urlcolor=blue,
+   urlbordercolor=blue,
+   pdfborder={1 1 1},
+   pdfborderstyle={/S/U/W 1}   
+}
+
+# 4. Significance
+Although the Wilcoxon Ranked Sum test reports a statistically significant difference between with-COVID and without-COVID groups, we believe the practical implications of this finding is questionable for two reasons.
+
+Firstly, although a 6-point margin can result in non-negligible changes to a governor's public image, this magnitude is small when compared to typical fluctuations in approval ratings that elected officials experience. A comparison can be made to the changes in approval ratings of the Office of the President, which is \href{https://news.gallup.com/poll/116677/Presidential-Approval-Ratings-Gallup-Historical-Statistics-Trends.aspx}{well documented}. Specifically, we examine the largest magnitude change in approval rating over a president's term. Over the past 5 US presidents, there was an average approval rating spread of 41%. Stated differently, among the last 5 US presidents, each has seen an average 41% fluctuation in their approval rating during their term. If we use fluctuations in presidential approval ratings as an analog for fluctuations in governor approval ratings, a 6% change in the midst of an anomalous COVID-19 pandemic would likely carry non-lasting impacts to a governor's political future. We find that in either case (with-COVID or without-COVID) the majority of the two populations approve of their governor's handling of COVID-19.
+
+Secondly, our sampling method is highly vulnerable to bias. Bias occurs when the expected value of our estimator is not equal to the true value in the population ($E[\hat\theta] \neq \theta$). This commonly occurs when one is sampling from a group that does not truly represent the population. This risk exists in our analysis. The ANES dataset takes steps to ensure its respondents represent a random sample of the population of all eligible American voters, but we have not applied the weights and adjustments that ANES recommends. Furthermore, when we divide the ANES dataset into with-COVID and without-COVID groups, our samples may no longer reflect true random draws from the population. To illustrate this problem further, our sample of 284 respondents who had a confirmed COVID-19 case in their household could have been overdrawn from a small handful of states with a particularly disliked governor, and would not reflect on how the overall population of Americans who had a confirmed COVID-19 case in their household would perceive their leadership's effectiveness at handling COVID-19.
+
+
