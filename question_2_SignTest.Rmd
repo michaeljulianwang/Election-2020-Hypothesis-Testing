@@ -23,19 +23,20 @@ library(dplyr)
 rawDat <- haven::read_dta('anes_timeseries_2020_stata_20210211/anes_timeseries_2020_stata_20210211.dta')
 
 ## Select fields & create understandable features
-dat <- rawDat %>% select(V201153, V201151, V201018, V201075x, V201228, V200010a) %>%
+dat <- rawDat %>% select(V201153, V201151, V201018, V201075x, V201228, V201019) %>%
   rename(Kamala_Meter = V201153,
          Biden_Meter = V201151,
          Party = V201018,
          Voting_Party = V201075x,
-         weight = V200010a) %>%
+         register = V201019) %>%
   mutate(Voting_Party = case_when(Voting_Party %in% c(10, 20, 30) ~ 'Democrat',
-                           Voting_Party %in% c(11, 21, 31)~ 'Republican',
+                           Voting_Party %in% c(11, 21, 31) ~ 'Republican',
                            TRUE ~ 'Other'))
 
-dat %<>% filter(Voting_Party == 'Democrat',
+dat %<>% filter(#Voting_Party == 'Democrat',
                 !(Kamala_Meter %in% c(998, 999, -4, -9)),
-                !(Biden_Meter %in% c(998, 999, -4, -9)))
+                !(Biden_Meter %in% c(998, 999, -4, -9)), 
+                register %in% c(1, -1))
 ```
 
 # Are Democratic voters more enthusiastic about Joe Biden or Kamala Harris? 
@@ -46,9 +47,9 @@ In this analysis, we will be exploring whether Democratic voters are more enthus
 ## Description of Data
 The data for this analysis is drawn from the 2020 Pre-Election Data by the American National Election Studies (ANES). This data was collected based on a variety of survey methods to sample the 231 million US citizens that are of voting age. An exploration of how representative this sample is of the US population and the independence of survey respondents is explored later in this analysis. 
 
-For this analysis, we will operationalize a Democratic voter to be whether the respondent had voted, intends to vote, or has a preference for a Democratic presidential candidate in the 2020 election. This field is a summary field calculated by the ANES based on whether the respondent has voted and, if not, whom they prefer. Further, we will operationalize a respondent's preference for Joe Biden or Kamala Harris with a respective `Feeling Thermometer` where the respondent ranks their feeling on a scale from 0 to 100, where responses greater than 50 indicate favorable feelings, less than 50 indicate unfavorable, and 50 being indifferent. 
+For this analysis, we will operationalize a Democratic voter to be whether the respondent had voted, intends to vote, or has a preference for a Democratic presidential candidate in the 2020 election and who intends to vote in the upcoming election. The former field field is a summary field calculated by the ANES based on whether the respondent has voted and, if not, whom they prefer. The latter field indicates whether or not the respondent intends to register for elections for the 2020 election. The combination of which allows us to narrow our scope just to Democratic voters. Further, we will operationalize a respondent's preference for Joe Biden or Kamala Harris with a respective `Feeling Thermometer` where the respondent ranks their feeling on a scale from 0 to 100, where responses greater than 50 indicate favorable feelings, less than 50 indicate unfavorable, and 50 being indifferent. 
 
-The operationalization of a Democratic voter is one of interpretation. Instead of an individual's intent or preference to vote, we could also have operationalized with a respondent's party of registration. Given that not all future voters were registered at the time of the survey and that they can vote for a candidate outside of their party, we believe the selected variable is more appropriate to define an individual as a Democratic voter or not. We can also assume that an individual that responded outside of the two parties or answered `Inapplicable` will denote a non-voter. 
+The operationalization of a Democratic voter is one of interpretation. Instead of an individual's intent or preference to vote, we could also have operationalized with a respondent's party of registration or their personal identification. Given that not all future voters were registered at the time of the survey and that they can vote for a candidate outside of their party, we believe the selected variable is more appropriate to define an individual as a Democratic voter or not. Further, an individual who identifies with one party may vote for another party due to the candidate pool. Therefore, a Democratic voter should be one intending to vote for a Democrat. To operationalize a voter, we use the individual's intent or register or if they have already registered to serve as a proxy for an individual voting in the upcoming election.
 
 The use of the `Feeling Thermometer` does appear to be an appropriate variable for this study. An individual who is more enthusiastic about one politician over another will likely feel more warm about said politician, resulting in a higher thermometer for that politician.
 
@@ -109,6 +110,6 @@ binomial_test <- dat %>%
   mutate(counter = 1) %$%
   binom.test(x = sum(diff), n = sum(counter), alternative = 'two.sided')
 ```
-The result of the statistical test indicates that, with an alpha-level of 0.05 on a two-sided test, we reject the null hypothesis, given the p-value of 0.00042, that there is no difference in the thermometer between Joe Biden and Kamala Harris. An alpha-level of 0.05 was selected given this is a common alpha-level selected throughout the industry. Further, the two-sided test was selected for a more conservative test given there is no *a priori* knowledge that Joe Biden or Kamala Harris would be more preferred. 
+The result of the statistical test indicates that, with an alpha-level of 0.05 on a two-sided test, we reject the null hypothesis, given the p-value of 0.00088, that there is no difference in the thermometer between Joe Biden and Kamala Harris. An alpha-level of 0.05 was selected given this is a common alpha-level selected throughout the industry. Further, the two-sided test was selected for a more conservative test given there is no *a priori* knowledge that Joe Biden or Kamala Harris would be more preferred. 
 
-We observe that Joe Biden is preferred to Kamala Harris 53.6% of the time for Democratic voters, excluding any ties. This practical effect size, 3.6% nominally relative to an expected 50%, is small. While we have observed this to be statistically different from the analysis above, the large proportion of respondents who responded the same for Joe Biden and Kamala Harris are ignored by this statistical test. These practical limitations of the statistical test paired with the low practical significance should be taken into account when assessing the overall significance of this statistically significant analysis. 
+We observe that Joe Biden is preferred to Kamala Harris 53.4% of the time for Democratic voters, excluding any ties. This practical effect size, 3.4% nominally relative to an expected 50%, is small. While we have observed this to be statistically different from the analysis above, the large proportion of respondents who responded the same for Joe Biden and Kamala Harris are ignored by this statistical test. These practical limitations of the statistical test paired with the low practical significance should be taken into account when assessing the overall significance of this statistically significant analysis. 
