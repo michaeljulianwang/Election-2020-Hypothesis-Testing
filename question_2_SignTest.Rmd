@@ -109,7 +109,7 @@ While the additional power of the Wilcoxon Signed Rank Test would be preferred, 
 * Ha: There is a difference in median of the signed differences between the Joe Biden and Kamala Harris thermometer
 
 ## 4. Test, results and interpretation
-```{r test, echo=FALSE, warning=TRUE, message=FALSE}
+```{r test, echo=TRUE, warning=TRUE, message=FALSE}
 binomial_test <- dat %>% 
   filter(!is.na(diff)) %>%
   mutate(counter = 1) %$%
@@ -117,7 +117,7 @@ binomial_test <- dat %>%
 ```
 The result of the statistical test indicates that, with an alpha-level of 0.05 on a two-sided test, we reject the null hypothesis, given the p-value of 0.00088, that there is no difference in the thermometer between Joe Biden and Kamala Harris. An alpha-level of 0.05 was selected given this is a common alpha-level selected throughout the industry. Further, the two-sided test was selected for a more conservative test given there is no *a priori* knowledge that Joe Biden or Kamala Harris would be more preferred. 
 
-We observe that Joe Biden is preferred to Kamala Harris 53.4% of the time for Democratic voters, excluding any ties. This practical effect size, 3.4% nominally relative to an expected 50%, is small. While we have seen this to be statistically different from the analysis above, the large proportion of respondents who responded the same for Joe Biden and Kamala Harris are ignored by this statistical test. 
+We observe that Joe Biden is preferred to Kamala Harris 53.4% of the time for Democratic voters, excluding any ties. This practical effect size, 3.4% nominally relative to an expected 50%, is small. While we have seen this to be statistically different from the analysis above, the large proportion of respondents who responded the same for Joe Biden and Kamala Harris are ignored by this statistical test. In summary, the small observed nomial effect size (3.4%) in favor of Joe Biden, the democratic ballot was not made drastically more positive by the addition of Kamala Harris.
 
 ## 5. Limitations
 There are many limitations to this analysis, highlighted below:
